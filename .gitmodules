@@ -7,3 +7,6 @@
 [submodule "lib/core"]
 	path = lib/core
 	url = https://github.com/numoen/core
+[submodule "lib/manager"]
+	path = lib/manager
+	url = https://github.com/numoen/manager
