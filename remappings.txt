@@ -1,0 +1,3 @@
+forge-std/=lib/forge-std/src/
+numoen-core/=lib/core/src/
+prb-math/=lib/prb-math/contracts/
