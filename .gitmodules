@@ -10,3 +10,5 @@
 [submodule "lib/manager"]
 	path = lib/manager
 	url = https://github.com/numoen/manager
+[submodule "/Users/kylescott/src/numoen-arb/lib/manager"]
+	branch = native

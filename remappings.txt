@@ -1,3 +1,4 @@
 forge-std/=lib/forge-std/src/
 numoen-core/=lib/core/src/
+numoen-manager/=lib/manager/src/
 prb-math/=lib/prb-math/contracts/
