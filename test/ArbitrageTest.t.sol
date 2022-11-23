@@ -47,15 +47,8 @@ contract ArbitrageTest is Test {
         lendgine = ILendgine(_lendgine);
         pair = IPair(_pair);
 
-        base.mint(_pair, 90 ether);
-        speculative.mint(_pair, 40 ether);
-        pair.mint(10 ether);
-
         address _uniPair = uniFactory.createPair(address(base), address(speculative));
         uniPair = IUniswapV2Pair(_uniPair);
-        base.mint(_uniPair, 100 ether);
-        speculative.mint(_uniPair, 100 ether);
-        uniPair.mint(address(this));
     }
 
     function mkaddr(string memory name) public returns (address) {
@@ -64,7 +57,15 @@ contract ArbitrageTest is Test {
         return addr;
     }
 
-    function testBasicArb() public {
+    function testBasicArb0() public {
+        base.mint(address(pair), 90 ether);
+        speculative.mint(address(pair), 40 ether);
+        pair.mint(10 ether);
+
+        base.mint(address(uniPair), 100 ether);
+        speculative.mint(address(uniPair), 100 ether);
+        uniPair.mint(address(this));
+
         uint256 priceBefore = NumoenLibrary.reservesToPrice(speculative.balanceOf(address(pair)), 10 ether, upperBound);
         uint256 uniPriceBefore = PRBMathUD60x18.div(
             base < speculative ? speculative.balanceOf(address(uniPair)) : base.balanceOf(address(uniPair)),
@@ -94,6 +95,49 @@ contract ArbitrageTest is Test {
 
         assert(base.balanceOf(cuh) > 0);
         assertEq(speculative.balanceOf(cuh), 0);
+
+        assertEq(speculative.balanceOf(address(arbitrage)), 0);
+        assertEq(base.balanceOf(address(arbitrage)), 0);
+    }
+
+    function testBasicArb1() public {
+        base.mint(address(pair), 10 ether);
+        speculative.mint(address(pair), 80 ether);
+        pair.mint(10 ether);
+
+        base.mint(address(uniPair), 200 ether);
+        speculative.mint(address(uniPair), 100 ether);
+        uniPair.mint(address(this));
+
+        uint256 priceBefore = NumoenLibrary.reservesToPrice(speculative.balanceOf(address(pair)), 10 ether, upperBound);
+        uint256 uniPriceBefore = PRBMathUD60x18.div(
+            base < speculative ? speculative.balanceOf(address(uniPair)) : base.balanceOf(address(uniPair)),
+            base < speculative ? base.balanceOf(address(uniPair)) : speculative.balanceOf(address(uniPair))
+        );
+
+        arbitrage.arb1(
+            Arbitrage.ArbParams({
+                base: address(base),
+                speculative: address(speculative),
+                baseScaleFactor: 18,
+                speculativeScaleFactor: 18,
+                upperBound: upperBound,
+                arbAmount: 1 ether,
+                recipient: cuh
+            })
+        );
+
+        uint256 priceAfter = NumoenLibrary.reservesToPrice(speculative.balanceOf(address(pair)), 10 ether, upperBound);
+        uint256 uniPriceAfter = PRBMathUD60x18.div(
+            base < speculative ? speculative.balanceOf(address(uniPair)) : base.balanceOf(address(uniPair)),
+            base < speculative ? base.balanceOf(address(uniPair)) : speculative.balanceOf(address(uniPair))
+        );
+
+        assert(priceAfter > priceBefore);
+        assert(uniPriceAfter < uniPriceBefore);
+
+        assert(speculative.balanceOf(cuh) > 0);
+        assertEq(base.balanceOf(cuh), 0);
 
         assertEq(speculative.balanceOf(address(arbitrage)), 0);
         assertEq(base.balanceOf(address(arbitrage)), 0);

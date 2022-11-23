@@ -57,8 +57,45 @@ contract Arbitrage is IUniswapV2Callee {
                     base: params.base,
                     speculative: params.speculative,
                     upperBound: params.upperBound,
+                    arbAmount: 0,
                     pair: pair,
-                    recipient: params.recipient
+                    recipient: params.recipient,
+                    zero: true
+                })
+            )
+        );
+    }
+
+    function arb1(ArbParams calldata params) external {
+        address uniPair = IUniswapV2Factory(uniFactory).getPair(params.base, params.speculative);
+
+        address pair = LendgineAddress.computePairAddress(
+            factory,
+            params.base,
+            params.speculative,
+            params.baseScaleFactor,
+            params.speculativeScaleFactor,
+            params.upperBound
+        );
+
+        uint256 speculativeBal = IERC20(params.speculative).balanceOf(pair);
+        uint256 liquidity = IPair(pair).totalSupply();
+
+        uint256 baseAmountIn = NumoenLibrary.getBaseIn(params.arbAmount, speculativeBal, liquidity, params.upperBound);
+
+        IUniswapV2Pair(uniPair).swap(
+            params.base < params.speculative ? baseAmountIn : 0,
+            params.base < params.speculative ? 0 : baseAmountIn,
+            address(this),
+            abi.encode(
+                UniCallbackData({
+                    base: params.base,
+                    speculative: params.speculative,
+                    upperBound: params.upperBound,
+                    arbAmount: params.arbAmount,
+                    pair: pair,
+                    recipient: params.recipient,
+                    zero: false
                 })
             )
         );
@@ -73,6 +110,8 @@ contract Arbitrage is IUniswapV2Callee {
         address speculative;
         uint256 upperBound;
         address pair;
+        uint256 arbAmount;
+        bool zero;
         address recipient;
     }
 
@@ -84,27 +123,51 @@ contract Arbitrage is IUniswapV2Callee {
     ) external override {
         UniCallbackData memory decoded = abi.decode(data, (UniCallbackData));
 
-        // Determine output of Numoen swap
-        uint256 speculativeBal = IERC20(decoded.speculative).balanceOf(decoded.pair);
-        uint256 liquidity = IPair(decoded.pair).totalSupply();
+        if (decoded.zero) {
+            // Determine output of Numoen swap
+            uint256 speculativeBal = IERC20(decoded.speculative).balanceOf(decoded.pair);
+            uint256 liquidity = IPair(decoded.pair).totalSupply();
 
-        uint256 specAmount = amount0 > 0 ? amount0 : amount1;
-        uint256 baseAmountOut = NumoenLibrary.getBaseOut(specAmount, speculativeBal, liquidity, decoded.upperBound);
+            uint256 specAmount = amount0 > 0 ? amount0 : amount1;
+            uint256 baseAmountOut = NumoenLibrary.getBaseOut(specAmount, speculativeBal, liquidity, decoded.upperBound);
 
-        // Determine input of Uniswap swap
-        (uint256 r0, uint256 r1, ) = IUniswapV2Pair(msg.sender).getReserves();
-        uint256 numerator = (decoded.base < decoded.speculative ? r0 : r1) * specAmount * 1000;
-        uint256 denominator = ((decoded.base < decoded.speculative ? r1 : r0) - specAmount) * 997;
-        uint256 baseAmountIn = (numerator / denominator) + 1;
+            // Determine input of Uniswap swap
+            (uint256 r0, uint256 r1, ) = IUniswapV2Pair(msg.sender).getReserves();
+            uint256 numerator = (decoded.base < decoded.speculative ? r0 : r1) * specAmount * 1000;
+            uint256 denominator = ((decoded.base < decoded.speculative ? r1 : r0) - specAmount) * 997;
+            uint256 baseAmountIn = (numerator / denominator) + 1;
 
-        // Swap on Numoen
-        SafeTransferLib.safeTransfer(decoded.speculative, decoded.pair, specAmount);
-        IPair(decoded.pair).swap(address(this), baseAmountOut, 0);
+            // Swap on Numoen
+            SafeTransferLib.safeTransfer(decoded.speculative, decoded.pair, specAmount);
+            IPair(decoded.pair).swap(address(this), baseAmountOut, 0);
 
-        // Payback Uniswap
-        SafeTransferLib.safeTransfer(decoded.base, msg.sender, baseAmountIn);
+            // Payback Uniswap
+            SafeTransferLib.safeTransfer(decoded.base, msg.sender, baseAmountIn);
 
-        // Keep the difference
-        SafeTransferLib.safeTransfer(decoded.base, decoded.recipient, baseAmountOut - baseAmountIn);
+            // Keep the difference
+            SafeTransferLib.safeTransfer(decoded.base, decoded.recipient, baseAmountOut - baseAmountIn);
+        } else {
+            uint256 baseAmount = amount0 > 0 ? amount0 : amount1;
+
+            // Determine input of Uniswap swap
+            (uint256 r0, uint256 r1, ) = IUniswapV2Pair(msg.sender).getReserves();
+            uint256 numerator = (decoded.base < decoded.speculative ? r1 : r0) * baseAmount * 1000;
+            uint256 denominator = ((decoded.base < decoded.speculative ? r0 : r1) - baseAmount) * 997;
+            uint256 speculativeAmountIn = (numerator / denominator) + 1;
+
+            // Swap on Numoen
+            SafeTransferLib.safeTransfer(decoded.base, decoded.pair, baseAmount);
+            IPair(decoded.pair).swap(address(this), 0, decoded.arbAmount);
+
+            // Payback Uniswap
+            SafeTransferLib.safeTransfer(decoded.speculative, msg.sender, speculativeAmountIn);
+
+            // Keep the difference
+            SafeTransferLib.safeTransfer(
+                decoded.speculative,
+                decoded.recipient,
+                decoded.arbAmount - speculativeAmountIn
+            );
+        }
     }
 }
