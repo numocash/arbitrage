@@ -57,6 +57,8 @@ contract Arbitrage is IUniswapV2Callee {
                     base: params.base,
                     speculative: params.speculative,
                     upperBound: params.upperBound,
+                    baseScaleFactor: params.baseScaleFactor,
+                    speculativeScaleFactor: params.speculativeScaleFactor,
                     arbAmount: 0,
                     pair: pair,
                     recipient: params.recipient,
@@ -81,7 +83,14 @@ contract Arbitrage is IUniswapV2Callee {
         uint256 speculativeBal = IERC20(params.speculative).balanceOf(pair);
         uint256 liquidity = IPair(pair).totalSupply();
 
-        uint256 baseAmountIn = NumoenLibrary.getBaseIn(params.arbAmount, speculativeBal, liquidity, params.upperBound);
+        uint256 baseAmountIn = NumoenLibrary.getBaseIn(
+            params.arbAmount,
+            speculativeBal,
+            liquidity,
+            params.upperBound,
+            params.baseScaleFactor,
+            params.speculativeScaleFactor
+        );
 
         IUniswapV2Pair(uniPair).swap(
             params.base < params.speculative ? baseAmountIn : 0,
@@ -92,6 +101,8 @@ contract Arbitrage is IUniswapV2Callee {
                     base: params.base,
                     speculative: params.speculative,
                     upperBound: params.upperBound,
+                    baseScaleFactor: params.baseScaleFactor,
+                    speculativeScaleFactor: params.speculativeScaleFactor,
                     arbAmount: params.arbAmount,
                     pair: pair,
                     recipient: params.recipient,
@@ -109,6 +120,8 @@ contract Arbitrage is IUniswapV2Callee {
         address base;
         address speculative;
         uint256 upperBound;
+        uint256 baseScaleFactor;
+        uint256 speculativeScaleFactor;
         address pair;
         uint256 arbAmount;
         bool zero;
@@ -129,7 +142,14 @@ contract Arbitrage is IUniswapV2Callee {
             uint256 liquidity = IPair(decoded.pair).totalSupply();
 
             uint256 specAmount = amount0 > 0 ? amount0 : amount1;
-            uint256 baseAmountOut = NumoenLibrary.getBaseOut(specAmount, speculativeBal, liquidity, decoded.upperBound);
+            uint256 baseAmountOut = NumoenLibrary.getBaseOut(
+                specAmount,
+                speculativeBal,
+                liquidity,
+                decoded.upperBound,
+                decoded.baseScaleFactor,
+                decoded.speculativeScaleFactor
+            );
 
             // Determine input of Uniswap swap
             (uint256 r0, uint256 r1, ) = IUniswapV2Pair(msg.sender).getReserves();
