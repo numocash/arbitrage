@@ -2,3 +2,4 @@ forge-std/=lib/forge-std/src/
 numoen-core/=lib/core/src/
 numoen-manager/=lib/manager/src/
 prb-math/=lib/prb-math/contracts/
+create3-factory/=lib/create3-factory/src/
